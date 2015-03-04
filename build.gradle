@@ -1,0 +1,131 @@
+import org.apache.tools.ant.taskdefs.condition.Os
+
+apply plugin: 'java'
+apply plugin: 'eclipse'
+apply plugin: 'war'
+
+//build stuff
+sourceCompatibility = 1.7
+targetCompatibility = 1.7
+
+ext {
+	// The drivers we want to use
+	drivers = [
+		"firefox",
+		"chrome",
+		"phantomJs",
+        "internetExplorer",
+		"firefoxSauce",
+		"sauceLabs"
+	]
+	ext {
+		groovyVersion = '2.3.6'
+		gebVersion = '0.10.0'
+		seleniumVersion = '2.44.0'
+		chromeDriverVersion = '2.10'
+        ieDriverVersion = '2.44.0'
+		phantomJsVersion = '1.9.7'
+        slf4jVersion = '1.7.0'
+		jerseyVersion = '2.11'
+		cucumberVersion = '1.1.8'
+		cucumberJvmVersion = '1.1.2'
+		cucumberHtmlVersion = '0.2.3'
+		junitVersion = '4.11'
+	}
+}
+
+configurations {
+	cucumberRuntime { extendsFrom testRuntime }
+}
+
+apply plugin: "groovy"
+apply from: "gradle/ci.gradle"
+apply from: "gradle/osSpecificDownloads.gradle"
+
+dependencies {
+
+    compile "org.slf4j:slf4j-simple:$slf4jVersion"
+	// Spock dependencies
+	testCompile "org.gebish:geb-spock:$gebVersion"
+	testCompile("org.spockframework:spock-core:0.7-groovy-2.0") { exclude group: "org.codehaus.groovy" }
+
+	// Geb & Groovy
+	testCompile group: 'org.codehaus.groovy', name: 'groovy-all', version: "$groovyVersion"
+	testCompile group: "org.gebish", name: "geb-junit4", version: "$gebVersion"
+	testCompile group: "org.codehaus.groovy.modules.http-builder", name:"http-builder", version: "0.6"
+
+	// Selenium Drivers
+	testCompile "org.seleniumhq.selenium:selenium-support:$seleniumVersion"
+	testCompile "org.seleniumhq.selenium:selenium-chrome-driver:$seleniumVersion"
+	testCompile "org.seleniumhq.selenium:selenium-firefox-driver:$seleniumVersion"
+    testCompile "org.seleniumhq.selenium:selenium-ie-driver:$seleniumVersion"
+	testCompile("com.github.detro.ghostdriver:phantomjsdriver:1.1.0") { // phantomjs driver pulls in a different selenium version
+		transitive = false }
+
+	// Cucumber
+	testCompile "info.cukes:cucumber-groovy:$cucumberJvmVersion"
+	testCompile "info.cukes:cucumber-junit:$cucumberJvmVersion"
+	testCompile "info.cukes:cucumber-html:$cucumberHtmlVersion"
+	testCompile "info.cukes:cucumber-core:$cucumberVersion"
+	testCompile "junit:junit:$junitVersion"
+}
+
+repositories { mavenCentral() }
+
+drivers.each { driver ->
+	task "${driver}Test"(type: Test) {
+		reports {
+			html.destination = reporting.file("$name/tests")
+			def folderName = project.hasProperty('execNo') ? execNo : '1'
+			junitXml.destination = file("$buildDir/test-results/$folderName/$name")
+		}
+		testLogging { // Show that tests are run in the command-line output
+			events 'started', 'passed', 'standard_out' }
+
+		outputs.upToDateWhen { false }  // Always run tests
+
+		systemProperty "geb.build.reportsDir", reporting.file("$name/geb")
+		systemProperty "geb.env", driver
+
+        if (project.hasProperty("test.grouping")){
+            systemProperty "test.grouping", project."test.grouping"
+        }
+
+		// These values are to be provided as command line arguments.
+//		systemProperty "springboard.geb.name", buildName
+//		systemProperty "springboard.geb.build", buildNumber
+//		systemProperty "springboard.geb.baseUrl", baseUrl
+//		systemProperty "springboard.geb.country", country
+//		systemProperty "springboard.geb.locale", locale
+//		systemProperty "springboard.geb.site", site //posible values {levi, dockers}
+//		systemProperty "springboard.geb.test.suite", testSuite
+//		
+//		include "**/" + testSuite + "_" + site + "_" + country + "_" + locale + "_" + "TestSuite.class"
+//
+//		// Only sauceLabs
+//		if(project.hasProperty('osBrowserVersion')) systemProperty "springboard.saucelabs.osBrowserVersion", osBrowserVersion
+//		if(project.hasProperty('username')) systemProperty "springboard.saucelabs.username", username
+//		if(project.hasProperty('password')) systemProperty "springboard.saucelabs.password", password
+	}
+}
+
+chromeTest {
+	dependsOn unzipChromeDriver
+
+	def chromedriverFilename = Os.isFamily(Os.FAMILY_WINDOWS) ? "chromedriver.exe" : "chromedriver"
+	systemProperty "webdriver.chrome.driver", new File(unzipChromeDriver.outputs.files.singleFile, chromedriverFilename).absolutePath
+}
+
+internetExplorerTest {
+    dependsOn unzipIEDriver
+
+    def iedriverFilename = Os.isFamily(Os.FAMILY_WINDOWS) ? "IEDriverServer.exe" : "IEDriverServer"
+    systemProperty "webdriver.ie.driver", new File(unzipIEDriver.outputs.files.singleFile, iedriverFilename).absolutePath
+}
+
+phantomJsTest {
+	dependsOn unzipPhantomJs
+
+	def phantomJsFilename = Os.isFamily(Os.FAMILY_WINDOWS) ? "phantomjs.exe" : "bin/phantomjs"
+	systemProperty "phantomjs.binary.path", new File(unzipPhantomJs.outputs.files.singleFile, phantomJsFilename).absolutePath
+}
