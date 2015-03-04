@@ -90,6 +90,7 @@ drivers.each { driver ->
         if (project.hasProperty("test.grouping")){
             systemProperty "test.grouping", project."test.grouping"
         }
+        systemProperty "spock.configuration", ".\\src\\test\\groovy\\SpockConfig.groovy"
 
 		// These values are to be provided as command line arguments.
 //		systemProperty "springboard.geb.name", buildName
